@@ -183,26 +183,29 @@ final class ClipStore: @unchecked Sendable {
 
     /// プレビュー用。文字は先頭の maxTextLength 文字まで、画像は maxImageBytes までの物だけ読む。
     func detail(_ id: Int, maxTextLength: Int = 20_000, maxImageBytes: Int = 30 * 1024 * 1024) throws -> ClipDetail? {
-        try locked {
+        // DBを読む間だけロックし、生データ（大きな画像など）はロックの外で読む。取得や一覧を待たせないため。
+        let fetched = try locked { () -> (row: [String: Any], representations: [[String: Any]], tags: [String])? in
             guard let row = try database.first("SELECT \(columns), substr(text, 1, ?) AS text, total_bytes, created_at, ocr_text, latex FROM clips WHERE id = ?", maxTextLength, id) else { return nil }
             let representations = try database.query("SELECT type, blob_hash, size FROM clip_representations WHERE clip_id = ? ORDER BY item_index, position", id)
-            var types: [String] = []
-            for type in representations.compactMap({ $0["type"] as? String }) where !types.contains(type) { types.append(type) }
-            let image = Capture.imageTypes.lazy.compactMap { type in representations.first { $0["type"] as? String == type } }.first
-            let imageData = image.flatMap { image -> Data? in
-                guard let hash = image["blob_hash"] as? String, (image["size"] as? Int ?? 0) <= maxImageBytes else { return nil }
-                return try? Data(contentsOf: blobURL(hash))
-            }
-            let filePaths = representations.filter { $0["type"] as? String == Capture.fileURLType }.compactMap { row -> String? in
-                guard let hash = row["blob_hash"] as? String, let data = try? Data(contentsOf: blobURL(hash)), let string = String(data: data, encoding: .utf8) else { return nil }
-                return URL(string: string)?.path
-            }
-            var summary = ClipSummary(row: row)
-            summary.tags = try tagNames(for: [id])[id] ?? []
-            return ClipDetail(summary: summary, text: row["text"] as? String, imageData: imageData, filePaths: filePaths, types: types,
-                              totalBytes: row["total_bytes"] as? Int ?? 0, createdAt: Date(timeIntervalSince1970: row["created_at"] as? Double ?? 0),
-                              ocrText: row["ocr_text"] as? String, latex: (row["latex"] as? String).flatMap(LatexSource.init(json:)))
+            return (row, representations, try tagNames(for: [id])[id] ?? [])
         }
+        guard let (row, representations, tags) = fetched else { return nil }
+        var types: [String] = []
+        for type in representations.compactMap({ $0["type"] as? String }) where !types.contains(type) { types.append(type) }
+        let image = Capture.imageTypes.lazy.compactMap { type in representations.first { $0["type"] as? String == type } }.first
+        let imageData = image.flatMap { image -> Data? in
+            guard let hash = image["blob_hash"] as? String, (image["size"] as? Int ?? 0) <= maxImageBytes else { return nil }
+            return try? Data(contentsOf: blobURL(hash), options: .mappedIfSafe)
+        }
+        let filePaths = representations.filter { $0["type"] as? String == Capture.fileURLType }.compactMap { row -> String? in
+            guard let hash = row["blob_hash"] as? String, let data = try? Data(contentsOf: blobURL(hash)), let string = String(data: data, encoding: .utf8) else { return nil }
+            return URL(string: string)?.path
+        }
+        var summary = ClipSummary(row: row)
+        summary.tags = tags
+        return ClipDetail(summary: summary, text: row["text"] as? String, imageData: imageData, filePaths: filePaths, types: types,
+                          totalBytes: row["total_bytes"] as? Int ?? 0, createdAt: Date(timeIntervalSince1970: row["created_at"] as? Double ?? 0),
+                          ocrText: row["ocr_text"] as? String, latex: (row["latex"] as? String).flatMap(LatexSource.init(json:)))
     }
 
     func text(of id: Int) throws -> String? {

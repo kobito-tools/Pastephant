@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 
 /// パネルの上部に出す作業の画面。list のときはプレビュー。
@@ -105,6 +106,18 @@ final class PanelModel: ObservableObject {
     private var messageTask: Task<Void, Never>?
     private var allTagsCache: [Tag] = []
     private var cachedContext: (id: Int, context: TransformContext)?
+    /// 複数選んだときに、つないだ文字（貼り方の結果に使う）。
+    private var cachedMerged: [Int: String] = [:]
+    /// 裏で読むときの番号。選択やカーソルが動くたびに増やし、読み終えたときに番号が変わっていれば捨てる。
+    private var previewGeneration = 0, styleGeneration = 0, resultGeneration = 0
+    private let latest = LatestRequests()
+    /// 貼り方を入れ替える間は、結果を読み直さない（まとめて読むため）。
+    private var applyingStyles = false
+    /// styles・styleResult がどの項目（と複数選択）のものか。⏎ のときに、いまの選択と合っているかを確かめる。
+    private var stylesTarget: [Int] = []
+    private static let loader = DispatchQueue(label: "io.github.kobito-tools.pastephant.preview", qos: .userInitiated, attributes: .concurrent)
+    /// 矢印キーを押し続けている間は読まない（最後に止まった項目だけ読む）。
+    private static let settle: TimeInterval = 0.05
 
     var settings: () -> Settings = { Settings() }
     var onCommand: (PanelCommand) -> Void = { _ in }
@@ -250,17 +263,42 @@ final class PanelModel: ObservableObject {
         }
     }
 
-    private func updatePreview() {
-        guard let id = previewID else { preview = nil; previewImage = nil; return }
-        guard preview?.summary.id != id else { return }
-        preview = try? store.detail(id)
-        previewImage = preview?.imageData.flatMap(NSImage.init(data:))
+    /// プレビューを裏で読む。選択はすぐに動かし、中身は少し遅れて出てもよい。
+    private func updatePreview(force: Bool = false) {
+        guard let id = previewID else {
+            previewGeneration += 1
+            latest.preview = previewGeneration
+            preview = nil; previewImage = nil
+            return
+        }
+        guard force || preview?.summary.id != id else { return }
+        previewGeneration += 1
+        let generation = previewGeneration, store = store, latest = latest
+        latest.preview = generation
+        Self.loader.asyncAfter(deadline: .now() + Self.settle) {
+            guard latest.preview == generation else { return }  // もう別の項目に移った
+            let detail = try? store.detail(id)
+            guard latest.preview == generation else { return }
+            let image = detail?.imageData.flatMap { Self.downsample($0, maxPixels: 1400) }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.previewGeneration == generation else { return }
+                self.preview = detail
+                self.previewImage = image
+            }
+        }
     }
 
     /// 一覧を読み直したあと、同じ項目でも中身（回数・タグなど）が変わっていることがあるので読み直す。
-    private func reloadPreview() {
-        preview = nil
-        updatePreview()
+    private func reloadPreview() { updatePreview(force: true) }
+
+    /// 画面に出す大きさに縮めて読む（大きな画像をそのまま開かない）。PDF はそのまま。
+    nonisolated static func downsample(_ data: Data, maxPixels: Int) -> NSImage? {
+        if data.starts(with: Array("%PDF".utf8)) { return NSImage(data: data) }
+        guard let source = CGImageSourceCreateWithData(data as CFData, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
+        let options: [CFString: Any] = [kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: maxPixels,
+                                        kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceShouldCacheImmediately: true]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
+        return NSImage(cgImage: image, size: NSSize(width: image.width, height: image.height))
     }
 
     func thumbnail(for clip: ClipSummary) -> NSImage? {
@@ -311,25 +349,75 @@ final class PanelModel: ObservableObject {
 
     var currentStyle: PasteStyle? { styles.indices.contains(styleIndex) ? styles[styleIndex] : nil }
 
+    /// 選んだ項目に合う貼り方と、いまの貼り方の結果を裏で作る。
     private func updateStyles() {
+        styleGeneration += 1
+        resultGeneration += 1
+        let generation = styleGeneration
+        latest.style = generation
         guard let id = selection, let clip = rows.first(where: { $0.id == id }) else {
             styles = []; styleIndex = 0; styleResult = nil
             return
         }
-        styles = PasteStyle.styles(kind: clip.kind, context: transformContext, combos: settings().transformCombos, multiple: multi.count > 1)
-        let index = styles.firstIndex { $0.id == preferredStyleID } ?? 0
-        if styleIndex != index { styleIndex = index } else { updateStyleResult() }
+        let ids = multi.count > 1 ? multi : [], combos = settings().transformCombos, basePath = settings().basePath
+        let keep = settings().keepParagraphBreaks, preferred = preferredStyleID, kind = clip.kind, store = store, latest = latest
+        let cached = cachedContext?.id == id ? cachedContext?.context : nil
+        Self.loader.asyncAfter(deadline: .now() + Self.settle) {
+            guard latest.style == generation else { return }
+            let context = cached ?? Self.makeContext(store, id: id, basePath: basePath, keepParagraphs: keep)
+            guard latest.style == generation else { return }
+            let styles = PasteStyle.styles(kind: kind, context: context, combos: combos, multiple: ids.count > 1)
+            let index = styles.firstIndex { $0.id == preferred } ?? 0
+            let merged = ids.isEmpty ? nil : ids.compactMap { try? store.text(of: $0) }.joined(separator: "\n")
+            let result = Self.result(of: styles[index], context: context, merged: merged, keepParagraphs: keep)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.styleGeneration == generation else { return }
+                self.cachedContext = (id, context)
+                self.cachedMerged = merged.map { [generation: $0] } ?? [:]
+                self.stylesTarget = ids.isEmpty ? [id] : ids
+                self.applyingStyles = true
+                self.styles = styles
+                self.styleIndex = index
+                self.applyingStyles = false
+                self.styleResult = result
+            }
+        }
     }
 
+    /// ⇥ で貼り方を変えたとき、その結果だけを裏で作り直す。
+    private var resultPending = false
+
     private func updateStyleResult() {
-        guard let style = currentStyle, let context = transformContext else { styleResult = nil; return }
+        guard !applyingStyles else { return }
+        resultPending = true
+        resultGeneration += 1
+        let generation = resultGeneration
+        guard let style = currentStyle, let id = selection, let context = cachedContext?.id == id ? cachedContext?.context : nil else { styleResult = nil; resultPending = false; return }
+        let merged = multi.count > 1 ? cachedMerged[styleGeneration] : nil, keep = settings().keepParagraphBreaks
+        Self.loader.async {
+            let result = Self.result(of: style, context: context, merged: merged, keepParagraphs: keep)
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.resultGeneration == generation else { return }
+                self.styleResult = result
+                self.resultPending = false
+            }
+        }
+    }
+
+    nonisolated static func makeContext(_ store: ClipStore, id: Int, basePath: String?, keepParagraphs: Bool) -> TransformContext {
+        let detail = try? store.detail(id, maxTextLength: ClipStore.maxStoredTextLength, maxImageBytes: 0)
+        let html = (try? store.data(of: id, type: "public.html")).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
+        return TransformContext(text: detail?.text, html: html, filePaths: detail?.filePaths ?? [], ocrText: detail?.ocrText,
+                                basePath: basePath, keepParagraphs: keepParagraphs)
+    }
+
+    /// 貼り方で貼られる文字（元の形のときは nil）。
+    nonisolated static func result(of style: PasteStyle, context: TransformContext, merged: String?, keepParagraphs: Bool) -> String? {
         switch style.action {
-        case .mode(.original), .latexImage, .moreTransforms: styleResult = nil
-        case .mode(.plainText): styleResult = multi.count > 1 ? mergedText(multi) : context.text
-        case .mode(.joinLines):
-            let text = multi.count > 1 ? mergedText(multi) : context.text
-            styleResult = text.map { LineJoiner.join($0, keepParagraphs: settings().keepParagraphBreaks) }
-        case .transform(let steps): styleResult = TextTransforms.apply(steps, to: context)
+        case .mode(.original), .latexImage, .moreTransforms: return nil
+        case .mode(.plainText): return merged ?? context.text
+        case .mode(.joinLines): return (merged ?? context.text).map { LineJoiner.join($0, keepParagraphs: keepParagraphs) }
+        case .transform(let steps): return TextTransforms.apply(steps, to: context)
         }
     }
 
@@ -347,10 +435,33 @@ final class PanelModel: ObservableObject {
         preferredStyleID = styles[index].id
     }
 
+    /// 裏で読み終える前に ⏎ を押したときは、いまの項目の貼り方と結果をここで作ってそろえる。
+    private func ensureStylesReady() {
+        let ids = targets
+        guard stylesTarget != ids, let id = selection, let clip = rows.first(where: { $0.id == id }) else { return }
+        styleGeneration += 1
+        latest.style = styleGeneration
+        let context = transformContext ?? TransformContext()
+        let newStyles = PasteStyle.styles(kind: clip.kind, context: context, combos: settings().transformCombos, multiple: ids.count > 1)
+        let index = newStyles.firstIndex { $0.id == preferredStyleID } ?? 0
+        applyingStyles = true
+        styles = newStyles
+        styleIndex = index
+        applyingStyles = false
+        styleResult = Self.result(of: newStyles[index], context: context, merged: ids.count > 1 ? mergedText(ids) : nil, keepParagraphs: settings().keepParagraphBreaks)
+        stylesTarget = ids
+    }
+
     /// ⏎：いまの貼り方で貼る。copyOnly なら、クリップボードに載せるだけ。
     func pasteSelected(copyOnly: Bool = false) {
         let ids = targets
         guard !ids.isEmpty else { NSSound.beep(); return }
+        ensureStylesReady()
+        if resultPending, let style = currentStyle, let context = cachedContext?.context {
+            // ⇥ で変えた直後で、結果がまだ届いていない。
+            styleResult = Self.result(of: style, context: context, merged: ids.count > 1 ? mergedText(ids) : nil, keepParagraphs: settings().keepParagraphBreaks)
+            resultPending = false
+        }
         switch currentStyle?.action ?? .mode(.original) {
         case .mode(.original):
             if copyOnly { ids.count == 1 ? onCommand(.copyOnly(ids[0])) : onCommand(.pasteText(mergedText(ids), copyOnly: true)) }
@@ -506,10 +617,7 @@ final class PanelModel: ObservableObject {
     private var transformContext: TransformContext? {
         guard let id = selection else { return nil }
         if let cachedContext, cachedContext.id == id { return cachedContext.context }
-        let detail = try? store.detail(id, maxTextLength: ClipStore.maxStoredTextLength, maxImageBytes: 0)
-        let html = (try? store.data(of: id, type: "public.html")).flatMap { $0 }.flatMap { String(data: $0, encoding: .utf8) }
-        let context = TransformContext(text: detail?.text, html: html, filePaths: detail?.filePaths ?? [], ocrText: detail?.ocrText,
-                                       basePath: settings().basePath, keepParagraphs: settings().keepParagraphBreaks)
+        let context = Self.makeContext(store, id: id, basePath: settings().basePath, keepParagraphs: settings().keepParagraphBreaks)
         cachedContext = (id, context)
         return context
     }
@@ -717,5 +825,21 @@ final class PanelModel: ObservableObject {
         latexTask?.cancel()
         reload()
         requestFocus(.search)
+    }
+}
+
+/// 裏で読むときに、いま欲しい番号を読むための入れ物（裏のキューからも読むので、ロックで守る）。
+final class LatestRequests: @unchecked Sendable {
+    private let lock = NSLock()
+    private var values = (preview: 0, style: 0)
+
+    var preview: Int {
+        get { lock.lock(); defer { lock.unlock() }; return values.preview }
+        set { lock.lock(); values.preview = newValue; lock.unlock() }
+    }
+
+    var style: Int {
+        get { lock.lock(); defer { lock.unlock() }; return values.style }
+        set { lock.lock(); values.style = newValue; lock.unlock() }
     }
 }

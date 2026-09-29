@@ -305,10 +305,8 @@ extension ClipStore {
 
     /// 1つの型の生データだけを読む（HTML の表など。全ての生データは読まない）。
     func data(of id: Int, type: String) throws -> Data? {
-        try locked {
-            guard let hash = try database.first("SELECT blob_hash FROM clip_representations WHERE clip_id = ? AND type = ? ORDER BY item_index, position LIMIT 1", id, type)?["blob_hash"] as? String else { return nil }
-            return try? Data(contentsOf: blobURL(hash))
-        }
+        guard let hash = try locked({ try database.first("SELECT blob_hash FROM clip_representations WHERE clip_id = ? AND type = ? ORDER BY item_index, position LIMIT 1", id, type)?["blob_hash"] as? String }) else { return nil }
+        return try? Data(contentsOf: blobURL(hash))
     }
 
     func ocrText(of id: Int) throws -> String? {

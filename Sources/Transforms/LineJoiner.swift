@@ -59,6 +59,8 @@ enum LineJoiner {
 
     static func isDictionaryWord(_ word: String) -> Bool {
         guard !word.isEmpty else { return false }
+        // NSSpellChecker はメインスレッドで使う（貼り方の結果は裏で作るため）。
+        guard Thread.isMainThread else { return DispatchQueue.main.sync { isDictionaryWord(word) } }
         let checker = NSSpellChecker.shared
         let range = checker.checkSpelling(of: word, startingAt: 0, language: "en", wrap: false, inSpellDocumentWithTag: 0, wordCount: nil)
         return range.location == NSNotFound

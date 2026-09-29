@@ -316,5 +316,40 @@ check(Theme.paletteIndex(for: "論文") == Theme.paletteIndex(for: "論文") && 
 let kindColors = Set(ClipKind.allCases.map { kind in ClipKind.allCases.firstIndex(of: kind)! % Theme.palette.count })
 check(kindColors.count == ClipKind.allCases.count, "種類ごとの色は重ならない")
 
+// 17. 重い項目を選んでも、選択はすぐに動く（プレビューと貼り方は裏で読む）
+MainActor.assumeIsolated {
+    let heavyStore = try! ClipStore(directory: work.appendingPathComponent("store3"), schemaDirectory: schema)
+    let side = 2400
+    let noise = NSBitmapImageRep(bitmapDataPlanes: nil, pixelsWide: side, pixelsHigh: side, bitsPerSample: 8, samplesPerPixel: 4, hasAlpha: true, isPlanar: false, colorSpaceName: .deviceRGB, bytesPerRow: 0, bitsPerPixel: 0)!
+    arc4random_buf(noise.bitmapData!, noise.bytesPerRow * side)
+    let heavyPNG = noise.representation(using: .png, properties: [:])!
+    let heavyID = try! heavyStore.save(Capture(items: [[Representation(type: "public.png", data: heavyPNG)]], sourceAppName: "重い画像"), maxItemBytes: .max).id
+    let textID = try! heavyStore.save(Capture(items: [[Representation(type: "public.utf8-plain-text", data: Data("一行目\n二行目".utf8))]], sourceAppName: "文章", plainText: "一行目\n二行目"), maxItemBytes: .max).id
+    let model = PanelModel(store: heavyStore)
+    var commands: [PanelCommand] = []
+    model.onCommand = { commands.append($0) }
+    model.reload(keepSelection: false)
+    func wait(until condition: () -> Bool, seconds: Double = 10) {
+        let deadline = Date().addingTimeInterval(seconds)
+        while !condition(), Date() < deadline { RunLoop.main.run(until: Date().addingTimeInterval(0.01)) }
+    }
+    let started = Date()
+    model.selection = heavyID
+    let elapsed = Date().timeIntervalSince(started)
+    check(elapsed < 0.02, "重い画像（\(heavyPNG.count / 1_048_576)MB）を選んでも、選択はすぐに動く（\(Int(elapsed * 1000))ms）")
+    wait { model.preview?.summary.id == heavyID && model.previewImage != nil }
+    check(model.preview?.summary.id == heavyID, "プレビューは少し遅れて出る")
+    check(max(model.previewImage?.size.width ?? .infinity, model.previewImage?.size.height ?? .infinity) <= 1400, "プレビューの画像は画面の大きさに縮めて読む")
+    // 移った直後（貼り方を読み終える前）に ⏎ を押しても、いまの項目の貼り方で貼る。
+    model.selection = textID
+    model.pasteSelected()
+    if case .paste(let ids, let mode)? = commands.last { check(ids == [textID] && mode == .original, "移った直後の ⏎ は、いまの項目を貼る") } else { check(false, "移った直後の ⏎ は、いまの項目を貼る") }
+    wait { model.styles.contains { $0.id == "joinLines" } }
+    check(model.styles.map(\.id).contains("joinLines"), "貼り方も裏で読んで出る")
+    model.selectStyle(model.styles.firstIndex { $0.id == "joinLines" }!)
+    model.pasteSelected()
+    if case .paste(let ids, let mode)? = commands.last { check(ids == [textID] && mode == .joinLines, "⇥ で選んだ貼り方で貼る") } else { check(false, "⇥ で選んだ貼り方で貼る") }
+}
+
 print(failures == 0 ? "すべて成功" : "\(failures) 件失敗")
 exit(failures == 0 ? 0 : 1)
