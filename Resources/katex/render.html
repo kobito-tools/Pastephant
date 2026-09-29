@@ -1,0 +1,37 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<!-- Pastephant の数式画像（F-06）を描くためのページ。LatexRenderer.swift が render() を呼ぶ。 -->
+<link rel="stylesheet" href="katex.min.css">
+<script src="katex.min.js"></script>
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  #math { display: inline-block; line-height: 1; }
+  .katex-display { margin: 0 !important; }
+  .katex { font-size: 1em; }
+</style>
+</head>
+<body>
+<span id="math"></span>
+<script>
+  // 描いた数式の範囲（CSS px ＝ PDF の pt）を返す。書き方の誤りは error に入れる。
+  async function render(source, macros, displayMode, color, background, fontSize, padding) {
+    const element = document.getElementById("math");
+    element.style.color = color;
+    element.style.background = background || "transparent";
+    element.style.fontSize = fontSize + "px";
+    element.style.padding = padding + "px";
+    try {
+      katex.render((macros ? macros + "\n" : "") + source, element, { displayMode, throwOnError: true, strict: "ignore", trust: false });
+    } catch (error) {
+      element.textContent = "";
+      return { error: String(error.message || error) };
+    }
+    await document.fonts.ready;
+    const rect = element.getBoundingClientRect();
+    return { x: rect.left, y: rect.top, width: Math.ceil(rect.width), height: Math.ceil(rect.height) };
+  }
+</script>
+</body>
+</html>
