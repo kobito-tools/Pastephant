@@ -8,6 +8,7 @@ Xcode Command Line Tools（`xcode-select --install`）が必要です。
 
 ```bash
 ./build.sh                                 # フォルダ直下に Pastephant.app（ユニバーサルバイナリ）を作成
+./scripts/package-release.sh               # Releases 用の dist/Pastephant_<版>_universal.zip を作成
 ./tests/run.sh                             # 取得から書き戻し・検索・タグ・変換・文字認識・数式・Tomelet への書き出しまでのテスト
 ./scripts/make-icon.sh                     # アイコンを描き直す（make-icon.py → icon.svg → icon-1024.png・AppIcon.icns）
 ./scripts/sync-schema.sh <Tomeletのフォルダ> # Tomelet の DB 更新を schema/tomelet/ へ写す
