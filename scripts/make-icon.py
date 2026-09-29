@@ -92,7 +92,30 @@ def cling():
     return f'<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">{body}</svg>\n'
 
 
+# --- dmg を開いたときの背景（600×400pt）。左の Pastephant から右の Applications へ、小人が案内する ---
+def dmg_background():
+    ears = f'''<path d="M13 10 C4 4 -4.5 9 -4 19 C-3.6 26 0 30.5 4.5 36.5 C5.5 32 8 29.5 11.5 28.5" fill="#B3BDC6" stroke="{INK}" stroke-width="1.6"/>
+    <path d="M11.5 13.5 C5 10 0 13.5 0 19.5 C0 24 2.5 27.5 5.5 31 C7 28.5 9 27 11 26.5" fill="#D9C3C0" stroke="none"/>
+    <path d="M35 10 C44 4 52.5 9 52 19 C51.6 26 48 30.5 43.5 36.5 C42.5 32 40 29.5 36.5 28.5" fill="#B3BDC6" stroke="{INK}" stroke-width="1.6"/>
+    <path d="M36.5 13.5 C43 10 48 13.5 48 19.5 C48 24 45.5 27.5 42.5 31 C41 28.5 39 27 37 26.5" fill="#D9C3C0" stroke="none"/>'''
+    arms = '<path d="M37 24 Q41 22 44.5 17"/><path d="M11.5 26 Q8.5 29 8 32.5"/>'
+    guide = kobito(300 - 24 * 1.9, 268, s=1.9, arms=arms, legs="walk", extra_back=ears, face="open")
+    return f'''<svg xmlns="http://www.w3.org/2000/svg" width="600" height="400" viewBox="0 0 600 400">
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F6F3EC"/><stop offset="1" stop-color="#E7E2D6"/></linearGradient></defs>
+  <rect width="600" height="400" fill="url(#bg)"/>
+  <path d="M0 0 H600 V56 H0 Z" fill="#8FA2B3" opacity=".22"/>
+  <text x="300" y="36" text-anchor="middle" font-family="Hiragino Sans, Hiragino Kaku Gothic ProN, sans-serif" font-size="17" font-weight="600" fill="{INK}">Pastephant を Applications フォルダへドラッグしてください</text>
+  <path d="M225 190 C265 160 335 160 375 190" fill="none" stroke="#728698" stroke-width="5" stroke-linecap="round" stroke-dasharray="2 12"/>
+  <path d="M366 176 L380 193 L360 199" fill="none" stroke="#728698" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+  {guide}
+  <text x="300" y="384" text-anchor="middle" font-family="Hiragino Sans, sans-serif" font-size="11" fill="#7A817D">kobito-tools</text>
+</svg>
+'''
+
+
 if __name__ == "__main__":
     open(sys.argv[1], "w").write(pastephant())
     if len(sys.argv) > 2:
         open(sys.argv[2], "w").write(cling())
+    if len(sys.argv) > 3:
+        open(sys.argv[3], "w").write(dmg_background())

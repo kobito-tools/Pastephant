@@ -4,10 +4,13 @@ set -euo pipefail
 cd "${0:A:h}/.."
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-python3 scripts/make-icon.py assets/icon/icon.svg assets/icon/kobito-cling.svg
+python3 scripts/make-icon.py assets/icon/icon.svg assets/icon/kobito-cling.svg assets/dmg/background.svg
 xcrun swift scripts/render-svg.swift assets/icon/icon.svg assets/icon/icon-1024.png 1024
 # パネルにしがみつく小人（64pt を 3倍で）。
 xcrun swift scripts/render-svg.swift assets/icon/kobito-cling.svg Resources/kobito-cling.png 192
+# dmg を開いたときの背景（600×400pt と、その2倍）。
+xcrun swift scripts/render-svg.swift assets/dmg/background.svg assets/dmg/background.png 600 400
+xcrun swift scripts/render-svg.swift assets/dmg/background.svg assets/dmg/background@2x.png 1200 800
 mkdir "$work/AppIcon.iconset"
 for size in 16 32 128 256 512; do
   xcrun swift scripts/render-svg.swift assets/icon/icon.svg "$work/AppIcon.iconset/icon_${size}x${size}.png" $size

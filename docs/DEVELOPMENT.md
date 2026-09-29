@@ -8,7 +8,7 @@ Xcode Command Line Tools（`xcode-select --install`）が必要です。
 
 ```bash
 ./build.sh                                 # フォルダ直下に Pastephant.app（ユニバーサルバイナリ）を作成
-./scripts/package-release.sh               # Releases 用の dist/Pastephant_<版>_universal.zip を作成
+./scripts/package-release.sh               # Releases 用の dist/Pastephant_<版>.dmg と dist/Pastephant_<版>_universal.zip を作成
 ./tests/run.sh                             # 取得から書き戻し・検索・タグ・変換・文字認識・数式・Tomelet への書き出しまでのテスト
 ./scripts/make-icon.sh                     # アイコンを描き直す（make-icon.py → icon.svg → icon-1024.png・AppIcon.icns）
 ./scripts/sync-schema.sh <Tomeletのフォルダ> # Tomelet の DB 更新を schema/tomelet/ へ写す
@@ -16,6 +16,8 @@ Xcode Command Line Tools（`xcode-select --install`）が必要です。
 ```
 
 版番号は `build.sh` の `VERSION` で指定します。`Pastephant-Setup.command` は `build.sh` を呼び出すだけの、ソースから使う人向けの入口です。
+
+`package-release.sh` の dmg は、アプリ・Applications へのリンク・背景（`assets/dmg/`。`scripts/make-icon.sh` で描き直せる）を置き、窓の並べ方を Finder に頼んでから圧縮します。初回は「Finder を操作する許可」を求められることがあります。許可しないと、背景なし（並べ方なし）の dmg になります。
 
 `tests/run.sh` は名前付きの NSPasteboard と一時フォルダを使うので、実際のクリップボード・履歴・基準パスには触れません。数式のテストは同梱の KaTeX を画面外の WKWebView で動かします。
 

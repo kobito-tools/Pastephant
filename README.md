@@ -12,12 +12,12 @@ kobito-tools シリーズの1つです。[OpenSesame!](https://github.com/kobito
 
 ## ダウンロード
 
-[Releases](../../releases/latest) ページから `Pastephant_x.y.z_universal.zip` をダウンロードしてください。`x.y.z` にはバージョン番号が入ります。
+[Releases](../../releases/latest) ページから `Pastephant_x.y.z.dmg` をダウンロードしてください（`x.y.z` にはバージョン番号が入ります）。zip がよい場合は `Pastephant_x.y.z_universal.zip` も置いてあります。どちらも Apple Silicon と Intel の Mac で動きます。
 
 ## インストール
 
-1. ダウンロードした `.zip` ファイルを開き、展開された `Pastephant.app` を Applications フォルダにドラッグします。
-2. アプリケーションフォルダから Pastephant を起動します。Dock には出ず、メニューバーにクリップボードのアイコンが出ます。
+1. ダウンロードした `.dmg` ファイルを開きます。出てきた窓で、`Pastephant` を右の `Applications` フォルダにドラッグします（zip の場合は、展開された `Pastephant.app` を Applications フォルダに移動します）。
+2. アプリケーションフォルダから Pastephant を起動します。dmg は Finder のサイドバーの「⏏」で取り出して、ゴミ箱に入れて構いません。Dock には出ず、メニューバーにクリップボードのアイコンが出ます。
 3. 初めて貼るときに「アクセシビリティ」の許可を求められます。「システム設定」→「プライバシーとセキュリティ」→「アクセシビリティ」で Pastephant をオンにしてください。許可が無い間は、選んだ項目をクリップボードに戻すだけになります（自分で `⌘V` を押せば貼れます）。
 4. ペーストスタックを初めて使うときは「入力監視」の許可を求められます（`⌘V` が押されたことだけを見ます）。
 
