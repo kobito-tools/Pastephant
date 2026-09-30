@@ -1,0 +1,283 @@
+<!doctype html>
+<!-- README のデモ（docs/images/demo.gif）の元になる絵。render(秒) でその時刻の画面を描く。scripts/demo.sh がコマ撮りする。 -->
+<html lang="ja"><head><meta charset="utf-8">
+<style>
+:root{--accent:#5F7A90;--paper:#F3F0E8;--card:#FFFFFF;--cardBorder:#E0DBCF;--well:#FBFAF6;--wellBorder:#D3CCBC;--ink:#3B4441;--subtle:#7A817D;--keycap:#E8E3D7}
+*{box-sizing:border-box}
+html,body{margin:0;width:960px;height:600px;overflow:hidden}
+body{font-family:-apple-system,"Hiragino Sans","Hiragino Kaku Gothic ProN",sans-serif;color:var(--ink);position:relative;
+  background:radial-gradient(circle at 18% 22%,#C9D3DA 0,transparent 42%),radial-gradient(circle at 80% 85%,#D8CFC0 0,transparent 45%),linear-gradient(160deg,#9FB0BE,#7E93A5 60%,#8C9AA2)}
+.menubar{position:absolute;left:0;top:0;right:0;height:24px;background:rgba(246,244,238,.72);backdrop-filter:blur(10px);display:flex;align-items:center;gap:18px;padding:0 14px;font-size:12.5px;z-index:50}
+.menubar b{font-weight:700}.menubar .dot{width:12px;height:12px;border-radius:50%;background:#3B4441}
+.menubar .right{margin-left:auto;display:flex;align-items:center;gap:14px}
+.mbicon{width:18px;height:18px;display:grid;place-items:center;border-radius:4px}
+.win{position:absolute;background:#fff;border-radius:10px;box-shadow:0 18px 40px rgba(30,40,50,.28),0 0 0 .5px rgba(0,0,0,.18);overflow:hidden}
+.win .bar{height:30px;background:#F2F1EE;border-bottom:1px solid #E2E0DA;display:flex;align-items:center;padding:0 12px;gap:7px;font-size:12px;color:#555}
+.win .bar i{width:11px;height:11px;border-radius:50%;display:inline-block}
+.win .bar span{margin-left:10px;font-weight:600}
+.win.inactive .bar i{background:#D5D3CE!important}
+.doc{padding:22px 26px;font-size:14px;line-height:1.75}
+.doc h2{font-size:17px;margin:0 0 6px}
+.caret{display:inline-block;width:1.5px;height:17px;background:#2A6FDB;vertical-align:-3px}
+.pasted{border-radius:3px;transition:none}
+.pdf{padding:26px 34px;font-family:"Hiragino Mincho ProN",serif;font-size:14px;line-height:1.9;color:#222}
+.pdf h3{font-family:-apple-system,"Hiragino Sans",sans-serif;font-size:14px;margin:0 0 8px}
+.gl{height:9px;border-radius:4px;background:#E6E4DF;margin:12px 0}
+.sel{background:#B4D5FE}.inactive .sel{background:#DCDCDC}
+/* パネル */
+.panel{position:absolute;top:32px;width:380px;height:560px;border-radius:16px;background:rgba(243,240,232,.97);border:1px solid rgba(211,204,188,.8);
+  box-shadow:0 20px 50px rgba(20,30,40,.3);padding:10px;display:flex;flex-direction:column;gap:10px;z-index:30}
+.search{display:flex;align-items:center;gap:8px;color:var(--subtle)}
+.field{flex:1;display:flex;align-items:center;gap:6px;background:var(--card);border:1.5px solid var(--accent);border-radius:10px;padding:6px 10px;font-size:14px;height:34px}
+.field .ph{color:#B5B8B3}.field .q{color:var(--ink)}
+.box{background:var(--well);border:1px solid var(--wellBorder);border-radius:12px;box-shadow:0 1px 3px rgba(0,0,0,.06);overflow:hidden;display:flex;flex-direction:column;flex:none}
+.box .title{font-size:10.5px;font-weight:600;color:var(--subtle);padding:7px 12px 0}
+.pvhead{display:flex;align-items:center;gap:6px;padding:6px 12px 4px;font-size:12px;font-weight:600}
+.pvhead .tags{font-weight:400;font-size:11px;color:var(--accent)}
+.pvhead .kind{margin-left:auto;font-weight:400;font-size:11px;color:#8A8F8B;display:flex;align-items:center;gap:4px}
+.pvbody{flex:1;padding:4px 12px;font-size:12.5px;line-height:1.55;white-space:pre-wrap;overflow:hidden}
+.pvfoot{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:2px 12px 8px;font-size:10.5px;color:#8A8F8B;line-height:1.45}
+.styled{font-size:11px;font-weight:600;color:var(--accent);margin-bottom:3px;white-space:normal}
+.strip{border-top:1px solid var(--wellBorder);display:flex;align-items:center;gap:6px;padding:7px 10px;white-space:nowrap;overflow:hidden}
+.strip .lbl{font-size:10.5px;font-weight:600;color:var(--subtle)}
+.chip{font-size:12px;padding:4px 9px;border-radius:99px;background:var(--card);border:1px solid var(--cardBorder);color:var(--ink)}
+.chip.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+.list{flex:1;overflow:hidden;position:relative}
+.inner{display:flex;flex-direction:column;gap:6px;padding:0 2px 4px}
+.section{display:flex;align-items:center;gap:5px;font-size:11px;font-weight:600;color:var(--subtle);padding:2px 4px 0}
+.count{font-size:10px;font-weight:500;background:var(--keycap);border-radius:99px;padding:1px 5px}
+.clip{position:relative;display:flex;gap:10px;align-items:flex-start;background:var(--card);border:1px solid var(--cardBorder);border-radius:10px;padding:8px 9px 8px 12px;overflow:hidden;box-shadow:0 1px 1.5px rgba(0,0,0,.05);flex:none}
+.clip::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--tint)}
+.clip.on{border:2px solid var(--accent);padding:7px 8px 7px 11px;background:linear-gradient(rgba(95,122,144,.16),rgba(95,122,144,.16)),var(--card);box-shadow:0 1px 4px rgba(0,0,0,.1)}
+.lead{width:42px;height:42px;border-radius:8px;flex:none;display:grid;place-items:center;overflow:hidden;color:var(--tint);background:color-mix(in srgb,var(--tint) 14%,transparent)}
+.cmain{flex:1;min-width:0}
+.ctext{font-size:13px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.cmeta{display:flex;align-items:center;gap:5px;margin-top:4px;font-size:10.5px;color:var(--subtle);white-space:nowrap}
+.tag{font-size:10px;font-weight:500;padding:1px 5px;border-radius:99px}
+.num{font-size:10px;font-weight:500;color:rgba(122,129,125,.8);background:rgba(232,227,215,.7);border-radius:4px;padding:1px 4px;flex:none}
+.appi{width:13px;height:13px;border-radius:3.5px;display:inline-grid;place-items:center;color:#fff;font-size:8px;font-weight:700;flex:none}
+.pvhead .appi{width:16px;height:16px;border-radius:4px;font-size:10px}
+.hints{overflow:hidden;display:flex;gap:10px;align-items:center;font-size:11px;color:var(--subtle);padding:0 4px;white-space:nowrap}
+.hints kbd,.acts kbd{font:600 10.5px -apple-system,sans-serif;color:var(--ink);background:var(--keycap);border:1px solid var(--cardBorder);border-radius:5px;padding:2px 6px;margin-right:4px}
+.toast{background:var(--accent);color:#fff;border-radius:9px;padding:7px 12px;font-size:12px;font-weight:500;display:flex;gap:6px;align-items:center}
+.acts{padding:12px;display:flex;flex-direction:column;gap:6px;height:100%}.acts .rows{flex:1;overflow:hidden;display:flex;flex-direction:column;gap:1px}
+.acts .h{font-size:13px;font-weight:600;display:flex;gap:6px;align-items:center}
+.act{display:flex;align-items:center;gap:10px;padding:4px 6px;border-radius:6px;font-size:13px}
+.act.on{background:rgba(95,122,144,.25)}
+.act .k{width:22px;height:22px;border-radius:5px;background:rgba(0,0,0,.08);display:grid;place-items:center;font-weight:700;font-size:12px}
+.act{flex:none}.act .sc{margin-left:auto;font-size:11px;color:#B0B3AF}
+.kobito{position:absolute;width:64px;height:64px;z-index:31;transform-origin:53px 21px;filter:drop-shadow(0 1px 2px rgba(0,0,0,.18))}
+/* キーの案内 */
+.cap{position:absolute;bottom:22px;left:280px;transform:translateX(-50%);display:flex;align-items:center;gap:8px;background:rgba(36,42,48,.9);color:#fff;border-radius:14px;padding:9px 16px 9px 10px;font-size:15px;font-weight:600;white-space:nowrap;z-index:60;box-shadow:0 10px 30px rgba(0,0,0,.25)}
+.cap .key{background:#fff;color:#2F3533;border-radius:7px;min-width:34px;height:32px;padding:0 9px;display:grid;place-items:center;font:600 15px -apple-system,sans-serif;box-shadow:0 2px 0 #B9BCC0}
+.cap .key.down{transform:translateY(2px);box-shadow:none;background:#DDE6EE}
+.cap .plus{color:#9AA3AA;font-weight:400}
+.cap .txt{margin-left:6px}
+.fly{position:absolute;z-index:70;background:#fff;border-radius:6px;padding:3px 7px;font-size:10px;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.mathimg{font-family:"Times New Roman",serif;font-style:italic;font-size:30px;color:#222;text-align:center;padding:10px 0 6px}
+table.tb{border-collapse:collapse;font-size:12px;margin-top:2px;white-space:normal}
+table.tb td{border:1px solid #D9D6CE;padding:3px 10px;background:#fff}
+table.tb tr:first-child td{background:#EEF2EA;font-weight:600}
+</style></head><body>
+<div class="menubar"><div class="dot"></div><b id="appname">プレビュー</b><span>ファイル</span><span>編集</span><span>表示</span>
+  <div class="right"><div class="mbicon" id="mbicon"><svg width="14" height="15" viewBox="0 0 14 15" fill="none" stroke="#3B4441" stroke-width="1.4"><rect x="1.5" y="2.5" width="11" height="11.5" rx="2"/><rect x="4.5" y="1" width="5" height="3" rx="1" fill="#F6F4EE"/></svg></div><span>9月30日(水) 10:24</span></div></div>
+
+<div class="win" id="docwin" style="left:40px;top:62px;width:500px;height:430px">
+  <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span>ゼミの準備.txt</span></div>
+  <div class="doc"><h2>9月30日 ゼミの準備</h2>・先行研究のまとめ<br><span id="paste"></span><span class="caret" id="caret"></span>
+    <div class="gl" style="width:0"></div></div>
+</div>
+<div class="win" id="pdfwin" style="left:300px;top:84px;width:520px;height:400px">
+  <div class="bar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span>論文.pdf</span></div>
+  <div class="pdf"><h3>1　はじめに</h3><div id="pdflines"></div>
+    <div class="gl" style="width:92%"></div><div class="gl" style="width:86%"></div><div class="gl" style="width:90%"></div><div class="gl" style="width:60%"></div></div>
+</div>
+
+<div class="panel" id="panel"></div>
+<img class="kobito" id="kobito" src="../../assets/icon/kobito-cling.svg">
+<div class="cap" id="cap"></div>
+<div class="fly" id="fly">📋</div>
+
+<script>
+const PDF_LINES = ["大規模言語モデルは、少数の例を示すだけ", "で新しいタスクに適応できることが知られ", "ている。本研究では、その仕組みを注意機", "構の観点から分析する。"];
+const PDF_TEXT = PDF_LINES.join("\n"), JOINED = PDF_LINES.join("");
+document.getElementById("pdflines").innerHTML = PDF_LINES.map((l, i) => `<div><span id="pl${i}">${l}</span></div>`).join("");
+
+const PALETTE = ["#477B70", "#C75543", "#9B7432", "#5C668F", "#7B587D", "#416B7C", "#8A6A4F", "#6D7A45"];
+// Theme.paletteIndex と同じハッシュ。
+const color = key => { let h = 0; for (const c of key) h = (Math.imul(h, 31) + c.codePointAt(0)) >>> 0; return PALETTE[h % PALETTE.length]; };
+
+const ICON = {
+  text: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><rect x="3.5" y="2" width="13" height="16" rx="2"/><path d="M6.5 6.5h7M6.5 10h7M6.5 13.5h4.5"/></svg>',
+  table: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><rect x="2.5" y="3.5" width="15" height="13" rx="2"/><path d="M2.5 8h15M2.5 12.3h15M8 3.5v13M12.8 3.5v13"/></svg>',
+  file: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"><path d="M5 2h7l4 4v12H5z"/><path d="M12 2v4h4"/></svg>',
+  link: '<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M8.5 11.5a3.5 3.5 0 0 0 5 0l2.5-2.5a3.5 3.5 0 0 0-5-5l-1 1"/><path d="M11.5 8.5a3.5 3.5 0 0 0-5 0L4 11a3.5 3.5 0 0 0 5 5l1-1"/></svg>',
+  formula: '<span style="font:italic 600 19px Times New Roman,serif">ƒx</span>',
+};
+const CHART = w => `<svg width="${w}" height="${w * .62}" viewBox="0 0 100 62"><rect width="100" height="62" fill="#fff"/><path d="M12 6v48h82" stroke="#9AA" fill="none" stroke-width=".8"/>
+  <rect x="20" y="30" width="14" height="24" fill="#8FA2B3"/><rect x="42" y="18" width="14" height="36" fill="#5F7A90"/><rect x="64" y="10" width="14" height="44" fill="#C75543"/>
+  <text x="50" y="7" font-size="5.5" text-anchor="middle" fill="#444" font-family="sans-serif">精度の比較</text></svg>`;
+const APPS = {
+  "com.apple.Preview": ["プレビュー", "#3E8EE8", "P"], "com.apple.screencaptureui": ["スクリーンショット", "#6B7479", "S"],
+  "com.microsoft.Excel": ["Microsoft Excel", "#1F7A45", "X"], "com.apple.finder": ["Finder", "#3C9BF0", "F"],
+  "io.github.kobito-tools.pastephant": ["Pastephant", "#5F7A90", "P"], "com.apple.Safari": ["Safari", "#2F86E8", "S"],
+};
+const appIcon = b => `<span class="appi" style="background:${APPS[b][1]}">${APPS[b][2]}</span>`;
+
+const CLIPS = [
+  { id: "pdf", kind: "text", kindLabel: "テキスト", bundle: "com.apple.Preview", time: "10 秒前", tags: ["論文"], display: PDF_LINES.join(""),
+    styles: ["そのまま", "改行を消す", "「，．」に", "半角英数に", "数式画像に", "ほかの変換…"],
+    body: () => esc(PDF_TEXT), foot: "2026/09/30 10:24・コピー1回・貼り付け0回・76文字" },
+  { id: "graph", kind: "image", kindLabel: "画像", bundle: "com.apple.screencaptureui", time: "3 分前", tags: [], display: "画像 1280×800",
+    styles: ["画像", "画像の文字", "ほかの変換…"],
+    body: () => `<div style="display:flex;justify-content:center">${CHART(190)}</div><div style="font-size:11px;color:#8A8F8B;margin-top:4px">画像の文字：精度の比較</div>`,
+    foot: "2026/09/30 10:21・コピー1回・貼り付け0回・184 KB" },
+  { id: "table", kind: "table", kindLabel: "書式付き", bundle: "com.microsoft.Excel", time: "12 分前", tags: ["実験"], display: "条件　精度　時間",
+    styles: ["書式付き", "プレーン", "表 → LaTeX", "表 → Markdown", "表 → CSV", "ほかの変換…"],
+    body: () => `<table class="tb"><tr><td>条件</td><td>精度</td><td>時間</td></tr><tr><td>手法A</td><td>0.82</td><td>1.4s</td></tr><tr><td>手法B</td><td>0.87</td><td>2.1s</td></tr><tr><td>手法C</td><td>0.91</td><td>3.0s</td></tr></table>`,
+    foot: "2026/09/30 10:12・コピー2回・貼り付け1回・6 KB・48文字" },
+  { id: "file", kind: "file", kindLabel: "ファイル", bundle: "com.apple.finder", time: "1 時間前", tags: [], display: "実験データ.csv",
+    styles: ["ファイル", "パス", "~ のパス", "基準パスから", "ファイル名", "file://"],
+    body: () => `<div style="display:flex;gap:8px;align-items:flex-start;white-space:normal"><span style="color:#5C668F">${ICON.file.replace(/20/g, "28")}</span><div><div>実験データ.csv</div><div style="font-size:11px;color:#8A8F8B">/Users/taku/研究/2026</div></div></div>`,
+    foot: "2026/09/30 09:20・コピー1回・貼り付け0回・1 KB" },
+  { id: "formula", kind: "formula", kindLabel: "数式", bundle: "io.github.kobito-tools.pastephant", time: "昨日", tags: ["論文"], display: "\\int_0^1 f(x)\\,dx = F(1) - F(0)",
+    styles: ["数式画像", "LaTeX の式", "ほかの変換…"],
+    body: () => `<div class="mathimg">∫<sub style="font-size:15px">0</sub><sup style="font-size:15px">1</sup> f(x) dx = F(1) − F(0)</div><div style="font:11px Menlo,monospace;color:#8A8F8B">\\int_0^1 f(x)\\,dx = F(1) - F(0)</div>`,
+    foot: "2026/09/29 17:05・コピー1回・貼り付け3回・38 KB" },
+  { id: "link", kind: "link", kindLabel: "リンク", bundle: "com.apple.Safari", time: "昨日", tags: ["論文"], display: "https://arxiv.org/abs/2609.01234",
+    styles: ["そのまま", "改行を消す", "ほかの変換…"],
+    body: () => "https://arxiv.org/abs/2609.01234", foot: "2026/09/29 16:40・コピー1回・貼り付け0回・32 バイト・32文字" },
+];
+const ACTIONS = [["C", "コピーだけ（貼らない）", "⌘⏎"], ["T", "タグを付ける・外す", "⌘T"], ["P", "ピン留めする", "⌘P"], ["E", "編集してから貼る", "⌘E"],
+  ["R", "変換を選ぶ（つなげる・保存する）", ""], ["L", "数式画像を作る", "⌘L"], ["K", "ペーストスタックに積む", ""], ["S", "Tomelet に残す", "⌘S"],
+  ["N", "PopNote! の新しいメモにする", "⇧⌘N"], ["A", "PopNote! の開いているメモに足す", "⌥⇧⌘N"]];
+
+function esc(s) { return s.replace(/&/g, "&amp;").replace(/</g, "&lt;"); }
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const ease = x => 1 - Math.pow(1 - clamp(x), 3);
+const $ = id => document.getElementById(id);
+
+// 何秒に何が起きるか。
+const CAPTIONS = [
+  [1.2, 3.1, ["⌘", "C"], "コピーするだけで、形のまま覚えておく", 1.6],
+  [3.3, 4.9, ["⌥", "⌘", "V"], "画面の端から呼び出す", 3.7],
+  [5.0, 8.2, ["↑", "↓"], "選ぶと、中身がすぐ大きく見える", 5.4],
+  [8.3, 10.7, ["⇥"], "貼り方を選ぶと、貼られる内容を先に確かめられる", 8.9],
+  [10.8, 12.3, ["⏎"], "そのまま貼り付け", 11.0],
+  [12.4, 14.9, ["#論文"], "タグ・type:画像・app:Word で絞り込み", 13.2],
+  [15.0, 16.5, ["→"], "できることは1文字で", 15.3],
+  [16.6, 18.4, ["N"], "PopNote! のメモにも、Tomelet にも", 16.8],
+];
+const DOWNS = [5.4, 6.0, 6.6], UPS = [7.3, 7.55, 7.8];
+
+function panelX(t) {
+  // 出ている区間 [出す, しまう]
+  const spans = [[3.75, 11.05], [12.6, 18.5]];
+  for (const [a, b] of spans) {
+    if (t >= a && t < b + 0.2) {
+      const p = t < b ? ease((t - a) / 0.2) : 1 - ease((t - b) / 0.18);
+      return { x: 572 + (1 - p) * 70, o: p };
+    }
+  }
+  return null;
+}
+
+function render(t) {
+  // 窓：初めは PDF が前、3.3 秒で書類が前に。
+  const docFront = t >= 3.3;
+  $("docwin").style.zIndex = docFront ? 2 : 1; $("pdfwin").style.zIndex = docFront ? 1 : 2;
+  $("docwin").classList.toggle("inactive", !docFront); $("pdfwin").classList.toggle("inactive", docFront);
+  $("appname").textContent = docFront ? "テキストエディット" : "プレビュー";
+  // PDF の文を選ぶ。
+  const selP = clamp((t - 0.3) / 1.0) * PDF_LINES.length;
+  PDF_LINES.forEach((_, i) => $("pl" + i).className = selP > i + 0.2 ? "sel" : "");
+  // コピーしたら、メニューバーのアイコンへ小さく飛ぶ。
+  const fp = (t - 1.75) / 0.55, fly = $("fly");
+  fly.style.display = fp > 0 && fp < 1 ? "block" : "none";
+  if (fp > 0 && fp < 1) { const e = ease(fp); fly.style.left = 470 + (818 - 470) * e + "px"; fly.style.top = 160 + (4 - 160) * e + "px"; fly.style.opacity = 1 - fp * .6; fly.style.transform = `scale(${1 - e * .5})`; }
+  const pulse = t > 2.25 && t < 2.7;
+  $("mbicon").style.background = pulse ? "rgba(95,122,144,.35)" : "transparent";
+  // 貼った文。
+  const pasted = t >= 11.25;
+  $("paste").innerHTML = pasted ? `<span class="pasted" style="background:rgba(95,122,144,${.28 * (1 - clamp((t - 11.4) / 1))})">${JOINED}</span>` : "";
+  $("caret").style.visibility = docFront && Math.floor(t * 2) % 2 === 0 ? "visible" : "hidden";
+
+  // パネル
+  const pos = panelX(t), panel = $("panel"), kob = $("kobito");
+  if (!pos) { panel.style.display = kob.style.display = "none"; } else {
+    panel.style.display = kob.style.display = "flex"; kob.style.display = "block";
+    panel.style.left = pos.x + "px"; panel.style.opacity = pos.o; kob.style.opacity = pos.o;
+    kob.style.left = pos.x - 53 + "px"; kob.style.top = 32 + 560 * .42 - 21 + "px";
+    kob.style.transform = `rotate(${-0.02 + 0.05 * Math.sin(t * Math.PI * 2 / 3.8)}rad)`;
+    panel.innerHTML = panelHTML(t);
+    const list = panel.querySelector(".list"), on = panel.querySelector(".clip.on");
+    if (list && on) list.scrollTop = Math.max(0, on.offsetTop + on.offsetHeight + 4 - list.clientHeight);
+    const rowsBox = panel.querySelector(".rows"), act = panel.querySelector(".act.on");
+    if (rowsBox && act) rowsBox.scrollTop = Math.max(0, act.offsetTop - rowsBox.offsetTop + act.offsetHeight - rowsBox.clientHeight);
+  }
+
+  // キーの案内
+  const c = CAPTIONS.find(([a, b]) => t >= a && t < b), cap = $("cap");
+  if (!c) cap.style.display = "none"; else {
+    cap.style.display = "flex";
+    cap.style.opacity = Math.min(clamp((t - c[0]) / .15), clamp((c[1] - t) / .15));
+    const down = t >= c[4] && t < c[4] + .18 || (c[2][0] === "↑" && [...DOWNS, ...UPS].some(d => t >= d && t < d + .15));
+    const keys = c[2].map((k, i) => {
+      let d = down; if (c[2][0] === "↑") d = (k === "↓" ? DOWNS : UPS).some(x => t >= x && t < x + .15);
+      return (i ? `<span class="plus">${c[2][0] === "↑" ? "/" : "+"}</span>` : "") + `<span class="key${d ? " down" : ""}">${k}</span>`;
+    });
+    cap.innerHTML = keys.join("") + `<span class="txt">${c[3]}</span>`;
+  }
+}
+
+function panelHTML(t) {
+  const second = t >= 12.4;
+  // 検索
+  const typed = !second ? "" : t < 13.2 ? "" : t < 13.5 ? "#" : t < 13.8 ? "#論" : "#論文";
+  const rows = typed === "#論文" ? CLIPS.filter(c => c.tags.includes("論文")) : CLIPS;
+  // 選択
+  let sel = 0;
+  if (!second) { sel = DOWNS.filter(d => t >= d).length - UPS.filter(d => t >= d).length; }
+  const clip = rows[sel];
+  const styleIndex = !second && t >= 8.9 ? 1 : 0;
+  const mode = second && t >= 15.3 && t < 17.0 ? "actions" : "list";
+  const actIndex = t >= 16.8 ? 8 : 0;
+  const toast = second && t >= 17.0 ? "PopNote! の新しいメモにしました" : null;
+
+  let h = `<div class="search"><div class="field"><svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="#7A817D" stroke-width="1.6"><circle cx="6" cy="6" r="4.5"/><path d="M9.5 9.5 13 13"/></svg>`
+    + (typed ? `<span class="q">${typed}</span><span class="caret" style="height:15px;visibility:${Math.floor(t * 2) % 2 ? "hidden" : "visible"}"></span>` : `<span class="ph">検索（#タグ type:画像 app:Word …）</span>`)
+    + `</div><svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="#7A817D" stroke-width="1.4" stroke-linecap="round"><path d="M4.5 2v11M2 4.5 4.5 2 7 4.5M10.5 13V2M8 10.5l2.5 2.5 2.5-2.5"/></svg>`
+    + `<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#7A817D"><circle cx="12" cy="12" r="8" stroke-width="3.2" stroke-dasharray="3.1 3.2"/><circle cx="12" cy="12" r="6" stroke-width="1.6"/><circle cx="12" cy="12" r="2.4" stroke-width="1.6"/></svg></div>`;
+
+  if (mode === "actions") {
+    h += `<div class="box" style="height:280px"><div class="acts"><div class="h">⚡︎ この項目にできること</div><div class="rows">`
+      + ACTIONS.map(([k, l, s], i) => `<div class="act${i === actIndex ? " on" : ""}"><span class="k">${k}</span>${l}<span class="sc">${s}</span></div>`).join("") + `</div></div></div>`;
+  } else {
+    const style = clip.styles[styleIndex];
+    const b = APPS[clip.bundle];
+    let body = clip.body();
+    if (styleIndex > 0) body = `<div class="styled">「${style}」で貼られる内容</div>${JOINED}`;
+    h += `<div class="box" style="height:213px"><div class="title">プレビュー</div>`
+      + `<div class="pvhead">${appIcon(clip.bundle)}${b[0]}<span class="tags">${clip.tags.map(x => "#" + x).join(" ")}</span><span class="kind">${clip.kindLabel}</span></div>`
+      + `<div class="pvbody">${body}</div><div class="pvfoot">${clip.foot}</div>`
+      + `<div class="strip"><span class="lbl">貼り方</span>${clip.styles.map((s, i) => `<span class="chip${i === styleIndex ? " on" : ""}">${s}</span>`).join("")}</div></div>`;
+  }
+
+  h += `<div class="list"><div class="inner"><div class="section">🕘 ${typed === "#論文" ? "見つかった履歴" : "履歴"} <span class="count">${rows.length}</span></div>`;
+  rows.forEach((c, i) => {
+    const tint = color(c.bundle);
+    const lead = c.kind === "image" ? CHART(42) : ICON[c.kind];
+    const tags = c.tags.map(x => `<span class="tag" style="color:${color(x)};background:color-mix(in srgb,${color(x)} 13%,transparent)">#${x}</span>`).join("");
+    h += `<div class="clip${i === sel ? " on" : ""}" style="--tint:${tint}"><div class="lead" ${c.kind === "image" ? 'style="background:#fff"' : ""}>${lead}</div>`
+      + `<div class="cmain"><div class="ctext">${esc(c.display)}</div><div class="cmeta">${appIcon(c.bundle)}${APPS[c.bundle][0]} · ${c.time}${tags}</div></div><span class="num">⌘${i + 1}</span></div>`;
+  });
+  h += `</div></div>`;
+  if (toast) h += `<div class="toast">✓ ${toast}</div>`;
+  const hint = mode === "actions" ? [["英字", "そのキーの操作"], ["⏎", "選んだ操作"], ["esc", "戻る"]]
+    : [["⏎", `「${clip.styles[styleIndex]}」で貼る`], ["⇥", "貼り方"], ["→", "できること"], ["⌘/", "キー"]];
+  h += `<div class="hints">${hint.map(([k, x]) => `<span><kbd>${k}</kbd>${x}</span>`).join("")}</div>`;
+  return h;
+}
+window.DURATION = 19.4;
+render(Number(new URLSearchParams(location.search).get("t") || 9.5));
+</script></body></html>
